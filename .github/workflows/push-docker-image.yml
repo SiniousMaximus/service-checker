@@ -38,10 +38,3 @@ jobs:
             siniousmaximus/service-checker:latest
           cache-from: type=registry,ref=siniousmaximus/service-checker:latest
           cache-to: type=inline
-
-      - name: Update Docker Hub description
-        uses: peter-evans/dockerhub-description@v5
-        with:
-          username: siniousmaximus
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: siniousmaximus/service-checker
