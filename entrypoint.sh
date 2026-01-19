@@ -4,13 +4,12 @@ set -e
 echo "=== Starting Service Checker ==="
 
 # Copy config files
-cp /config/config.yml /home/checker/config.yml
-cp -r /config/.ssh /home/checker/.ssh
+cp /config/config.yml /etc/service-checker/config.yml
+cp -r /config/.ssh /root/.ssh
 
 # Fix permissions
-chown -R checker:checker /home/checker
-chmod 700 /home/checker/.ssh
-chmod 600 /home/checker/.ssh/* 2>/dev/null || true
+chmod 700 /root/.ssh
+chmod 600 /root/.ssh/* 2>/dev/null || true
 
 # Run the server
-exec su -s /bin/sh checker -c "python3 /home/checker/server.py start -p 8000"
+exec python3 /etc/service-checker/server.py start

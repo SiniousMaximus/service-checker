@@ -4,16 +4,11 @@ FROM alpine:3.23.2
 RUN apk update && apk upgrade && \
     apk add --no-cache openssh python3 py3-yaml
 
-# Create user
-RUN adduser -D checker
-
-# Set working directory
-WORKDIR /home/checker
-
 # Copy application files
-COPY --chown=checker:checker server.py /home/checker/
+RUN mkdir /etc/service-checker
+COPY server.py /etc/service-checker/server.py
 COPY entrypoint.sh /entrypoint.sh
-
 RUN chmod +x /entrypoint.sh
+RUN chmod +x /etc/service-checker/server.py
 
 CMD ["/bin/sh", "/entrypoint.sh"]
