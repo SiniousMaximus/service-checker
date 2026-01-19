@@ -1,11 +1,9 @@
 name: Build and Push Docker Image
-
 on:
   push:
     tags:
       - '*'
   workflow_dispatch:
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -23,12 +21,26 @@ jobs:
           username: siniousmaximus
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Extract tag name
+      - name: Extract tag name and detect branch
         id: tag
         run: |
           TAG=${GITHUB_REF_NAME}
           echo "TAG=${TAG}" >> $GITHUB_OUTPUT
           echo "Extracted tag: ${TAG}"
+          
+          # Find which branch contains this tag
+          BRANCH=$(git branch -r --contains ${GITHUB_SHA} | grep -E 'origin/(main|dev)' | sed 's/.*origin\///' | head -n 1)
+          
+          if [ "$BRANCH" = "main" ]; then
+            LATEST_TAG="latest"
+          elif [ "$BRANCH" = "dev" ]; then
+            LATEST_TAG="latest-dev"
+          else
+            LATEST_TAG="latest-other"
+          fi
+          
+          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "Detected branch: ${BRANCH}, using latest tag: ${LATEST_TAG}"
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
@@ -37,6 +49,6 @@ jobs:
           push: true
           tags: |
             siniousmaximus/service-checker:${{ steps.tag.outputs.TAG }}
-            siniousmaximus/service-checker:latest
+            siniousmaximus/service-checker:${{ steps.tag.outputs.LATEST_TAG }}
           cache-from: type=registry,ref=siniousmaximus/service-checker:latest
           cache-to: type=inline
