@@ -66,7 +66,7 @@ The following commands can be used with the script server.py:
 The follwoing flags are useable with server.py:
 
 - -d / --daemon: Combined with start, starts the process in the background
-- -p / --port: Change the port the webserver listens on.
+- -p / --port [PORT]: Change the port the webserver listens on.
 
 The server responds to GET http requests on `http://0.0.0.0:8000/` and `http://0.0.0.0:8000/api/service/<service-name>`. The former retuns a plain http responce if the server is up, and the later checks the status of the specified service on the remote host, and returns a json responce like the following example: `{"success": true, "service_name": "dnsmasq", "status": "up", "hostname": "alpine-vm", "service": "openrc"}`
 
