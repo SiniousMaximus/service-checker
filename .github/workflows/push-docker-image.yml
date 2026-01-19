@@ -40,10 +40,9 @@ jobs:
           cache-to: type=inline
 
       - name: Update Docker Hub description
-        run: |
-          REPO="siniousmaximus/service-checker"
-          README_CONTENT=$(sed ':a;N;$!ba;s/\n/\\n/g' README.md)
-          curl -s -X PATCH "https://hub.docker.com/v2/repositories/$REPO/" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: JWT ${{ secrets.DOCKERHUB_TOKEN }}" \
-            -d "{\"full_description\":\"$README_CONTENT\"}"    
+        uses: akhileshns/dockerhub-action@v2.5.0
+        with:
+          username: siniousmaximus
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: siniousmaximus/service-checker
+          description-file: README.md
