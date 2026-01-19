@@ -40,9 +40,8 @@ jobs:
           cache-to: type=inline
 
       - name: Update Docker Hub description
-        uses: akhileshns/dockerhub-action@v2.5.0
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: siniousmaximus
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: siniousmaximus/service-checker
-          description-file: README.md
