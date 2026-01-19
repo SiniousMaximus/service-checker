@@ -1,0 +1,6 @@
+service1:
+  hostname: host1
+  service: systemd
+service2:
+  hostname: host2
+  service: openrc

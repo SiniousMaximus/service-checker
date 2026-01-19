@@ -1,0 +1,9 @@
+services:
+  service-checker:
+    container_name: service-checker
+    image: siniousmaximus/service-checker:v0.1.0
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    volumes:
+      - ./config:/config
