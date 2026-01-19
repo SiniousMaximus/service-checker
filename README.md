@@ -20,7 +20,7 @@ Use the following docker-compose.yml:
 services:
   service-checker:
     container_name: service-checker
-    image: siniousmaximus/service-checker:v0.1.1
+    image: siniousmaximus/service-checker:latest
     ports:
       - "8000:8000"
     restart: unless-stopped
