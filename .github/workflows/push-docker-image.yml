@@ -27,20 +27,6 @@ jobs:
           TAG=${GITHUB_REF_NAME}
           echo "TAG=${TAG}" >> $GITHUB_OUTPUT
           echo "Extracted tag: ${TAG}"
-          
-          # Find which branch contains this tag
-          BRANCH=$(git branch -r --contains ${GITHUB_SHA} | grep -E 'origin/(main|dev)' | sed 's/.*origin\///' | head -n 1)
-          
-          if [ "$BRANCH" = "main" ]; then
-            LATEST_TAG="latest"
-          elif [ "$BRANCH" = "dev" ]; then
-            LATEST_TAG="latest-dev"
-          else
-            LATEST_TAG="latest-other"
-          fi
-          
-          echo "LATEST_TAG=${LATEST_TAG}" >> $GITHUB_OUTPUT
-          echo "Detected branch: ${BRANCH}, using latest tag: ${LATEST_TAG}"
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
@@ -49,6 +35,6 @@ jobs:
           push: true
           tags: |
             siniousmaximus/service-checker:${{ steps.tag.outputs.TAG }}
-            siniousmaximus/service-checker:${{ steps.tag.outputs.LATEST_TAG }}
+            siniousmaximus/service-checker:latest
           cache-from: type=registry,ref=siniousmaximus/service-checker:latest
           cache-to: type=inline
