@@ -1,7 +1,7 @@
-FROM alpine:3.23.2
+FROM alpine:3.21
 
 # Install packages
-RUN apk update && apk upgrade && \
+RUN apk update && \
     apk add --no-cache openssh python3 py3-yaml py3-requests
 
 # Copy application files

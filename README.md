@@ -10,7 +10,7 @@ You can either get Service Checker with docker, or run it bare metal (or in a Pr
 
 Only Systemd and OpenRC init systems are currently supported on the remote hosts. The hosts must be accessible with an ssh key for a user with the permissions to check the status of services.
 
-The server requires access to a config file and a directory with the private ssh keys used to connect to the remotes. The config must be in yaml with the following structure (Choose whatever name you want instead of "service1". The actuall service name is taken from the api call.):
+The server requires access to a config file and a directory with the private ssh keys used to connect to the remotes. The config must be in yaml with the following structure (service1 should be replaced with the actuall service name on the remote host):
 
 ```yaml
 service1: 
@@ -69,7 +69,7 @@ The following commands can be used with server.py:
 
 - start: Starts the process in the foreground
 - stop: Stops the webserver.
-- retstart: Restarts the webserver
+- retstart: Restarts the webserver (Use -d if you want the new process to run in the background)
 - status: Shows the status of the webserver.
 - version: Shows the current version of teh script
 - update: Updates the script to the latest release
@@ -80,7 +80,7 @@ The follwoing flags are useable with server.py:
 - -p / --port [PORT]: Change the port the webserver listens on. Default port is 8000
 - -c / --config [PATH TO CONFIG FILE]: Use a custom path pointing to a config file, defaults to /etc/service-checker/config.yml
 
-The server responds to http GET requests on `http://0.0.0.0:8000/` and `http://0.0.0.0:8000/api/service/<service-name>`. The former retuns a simple health check for the server, and the later checks the status of the specified service on a remote host, and returns a json responce like the following example: `{"success": true, "service_name": "caddy", "status": "up", "hostname": "caddy", "service": "systemd"}`
+The server responds to http GET requests on `http://0.0.0.0:8000/` and `http://0.0.0.0:8000/api/service/<service-name>`. The former retuns a simple health check for the server, and the later checks the status of the specified service on a remote host, and returns a json responce like the following example: `{"service_name": "caddy", "success": true, "hostname": "caddy", "service_type": "systemd", "status": "up"}`
 
 ## Uptime Kuma intergarion
 
@@ -88,11 +88,11 @@ In the dashboard, add a new monitor with the type "HTTP(S)-Json Query". The URL 
 
 ## Updating
 
-Simply pull the latest image if using the container using `docker pull siniousmaximus/server-checker:latest`. Else, you can use `./server.py update` to update and replace the script with the latest release. If using a Systemd or OpenRC service to run the script, you should manually restart the service after an update to make it use the new script. Or you can use the update.sh script. It requirs you to give it the path to the server script, and then performs the update and restarts a service called service-checker.
+For your own sake, backup what you have in case of any breaking change after an update. If you are using the docker image, simply use `docker pull siniousmaximus/server-checker:latest` to get the latest image. Otherwise, you can use `./server.py update` to update and replace the script with the latest release. If using a Systemd or OpenRC service to run the script, you should manually restart the service after an update to make it use the new script. Or you can use the update.sh script. It requirs you to give it the path to the server script, and then performs the update and restarts a service called service-checker.
 
 ## Security
 
-Obviously having a tool you downloaded from the internet have unlimited ssh access to your services is not the best. To reduce the risks, you can make sure the script calls to a non privlliged user on the remote host, and even go as far as to modify the `~/.ssh/authorized_keys` file on the host to minimize the damages it can do. You just need to make sure the user has access to the following commands:
+Obviously giving a tool you downloaded from the internet unlimited ssh access to your services is not the best thing to do. To reduce the risks, you can make sure the script calls to a non privlliged user on the remote host, and even go as far as to modify the `~/.ssh/authorized_keys` file on the host to minimize the damages it can do. You just need to make sure the user has access to the following commands:
 
 ```
 command="/usr/bin/systemctl is-active <SERVICE NAME>",no-agent-forwarding,no-port-forwarding,no-pty <THE PUBLIC KEY CONTENTS>
