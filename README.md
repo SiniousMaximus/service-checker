@@ -6,7 +6,7 @@ Uptime kuma is a great service, but for my personal use case missed a feature, t
 
 ## Requirements
 
-You can either get Service Checker with docker, or run it bare metal (or in a Proxmox LXC, but you get what I mean). Bare metal requires python3, python3-yaml, and openssh.
+You can either get Service Checker with docker, or run it bare metal (or in a Proxmox LXC, but you get what I mean). Bare metal requires python3, python3-yaml, python3-requests, and openssh.
 
 Only Systemd and OpenRC init systems are currently supported on the remote hosts. The hosts must be accessible with an ssh key for a user with the permissions to check the status of services.
 
@@ -63,7 +63,7 @@ You can use the provided install.sh script to automate the installation of Servi
 
 The script downloads server.py and an example config.yml into /etc/service-checker, creates a Systemd or OpenRC service called service-checker, and enable and starts it. The script must be ran as root, so do that or make sure you have sudo installed. Since this script expects to create a service file, your system must have Systemd or OpenRC installed to use it. Non Systemd or OpenRC systems might work with the server, but none has been tested so far.
 
-The install script checks for the presence of curl, python3, and openssh, but not python3-yaml, as its name is different across many distros. Make sure you have all of them installed. To my knowledge, the package name is "python3-yaml" in debian based and "python-yaml" in arch based ditros, and "py3-yaml" in alpine.
+The install script checks for the presence of curl, python3, and openssh, but not python3-yaml and python3-requests, as their names are different across many distros. Make sure you have all of them installed. To my knowledge, the package naming scheme is "python3-yaml" in debian based and "python-yaml" in arch based ditros, and "py3-yaml" in alpine. Same for python3-requests.
 
 The following commands can be used with server.py:
 
