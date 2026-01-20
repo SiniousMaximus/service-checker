@@ -1,7 +1,6 @@
 #!/bin/sh
 
 WORK_DIR="/etc/service-checker"
-SSH_DIR="/root/.ssh"
 
 # Rerun as root if not already
 if [ "$(id -u)" -ne 0 ]; then

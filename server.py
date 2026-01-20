@@ -265,15 +265,21 @@ def run_service_command(service_name):
     ssh_key = service_info.get("ssh_key")
     
     # Main service check logic
-    if service_type == 'systemd':
-        remote_cmd = f'systemctl is-active {service_name}'
-    elif service_type == 'openrc':
-        remote_cmd = f"rc-service {service_name} status"
-    else:
-        return {
-            'success': False,
-            'error': f'Unknown service type: {service_type}'
-        }
+    match service_type:
+        case "systemd":
+            remote_cmd = f'systemctl is-active {service_name}'
+        case "openrc":
+            remote_cmd = f"rc-service {service_name} status"
+        case "docker-health":
+            remote_cmd = f"docker inspect --format={{{{.State.Health.Status}}}} {service_name}"
+        case "docker-status":
+            remote_cmd = f"docker inspect --format={{{{.State.Status}}}} {service_name}"
+        case _:
+            return {
+                'success': False,
+                'error': f'Unknown service type: {service_type}'
+            }
+        
 
     # Sending the ssh command
     ssh_cmd = f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {user}@{ip} -p {port} -i {ssh_key} "{remote_cmd}"'
@@ -294,8 +300,8 @@ def run_service_command(service_name):
             if ':' in status:
                 status = status.split(':')[-1].strip()
 
-        # Change to a simple "up" or "down" message
-        if status == "started" or status == "active":
+        # Change status to a simple "up" or "down" message
+        if status == "started" or status == "active" or status == "running" or status == "healthy":
             status = "up"
         else:
             status = "down"
