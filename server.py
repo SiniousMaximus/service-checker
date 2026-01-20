@@ -9,6 +9,13 @@ import signal
 import time
 import subprocess
 import yaml
+import requests
+import tempfile
+from pathlib import Path
+import shutil
+
+# Version, same as the tag in the repo
+version = "v0.1.2"
 
 class CustomHandler(http.server.BaseHTTPRequestHandler):
     
@@ -143,6 +150,7 @@ def start_server(port=8000, daemon=False):
     
     Handler = CustomHandler
     
+    socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("0.0.0.0", port), Handler) as httpd:
         print(f"Server running listening on http://0.0.0.0:{port}/")
         sys.stdout.flush()  
@@ -224,9 +232,9 @@ def restart_server(port):
     start_server(port)
     print(f"Server restarted on port {port}")
 
-def load_config():
+def load_config(config_file_path):
     # Load configuration from config.yml in current directory
-    config_file = os.path.join(os.getcwd(), 'config.yml')
+    config_file = config_file_path or "/etc/service-checker/config.yml"
     
     if not os.path.exists(config_file):
         print(f"Warning: config.yml not found at {config_file}")
@@ -243,14 +251,9 @@ def load_config():
         print(f"Error reading config.yml: {e}")
         return {}
 
-def get_service_info(service_name):
-    # Get service information from config
-    config = load_config()
-    return config.get(service_name)
-
 def run_service_command(service_name):
-    # Get the hostname and servicetype of the requested service
-    config = load_config()
+    # Load config file
+    config = load_config(config_file_path)
     service_info = config.get(service_name)
 
     if not service_info:
@@ -258,8 +261,14 @@ def run_service_command(service_name):
             'success': False,
             'error': f'Service {service_name} not found in config'
         }
-    hostname = service_info.get('hostname')
-    service_type = service_info.get('service')
+
+    # Get the data from config.yml
+    hostname = service_info.get('hostname', "hostname not specified") # Sets the hostname to "hostname not specified" if not set in the config file
+    service_type = service_info.get('service_type')
+    user = service_info.get("user")
+    ip = service_info.get("ip")
+    port = service_info.get("port", "22") # Defaults to 22 if not specified
+    ssh_key = service_info.get("ssh_key")
     
     # Main service check logic
     if service_type == 'systemd':
@@ -272,7 +281,7 @@ def run_service_command(service_name):
             'error': f'Unknown service type: {service_type}'
         }
 
-    ssh_cmd = f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {hostname} "{remote_cmd}"'
+    ssh_cmd = f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {user}@{ip} -p {port} -i {ssh_key} "{remote_cmd}"'
     
     try:
         result = subprocess.run(
@@ -297,11 +306,11 @@ def run_service_command(service_name):
             status = "down"
         
         return {
-            'success': result.returncode == 0,
             'service_name': service_name,
-            'status': status,
+            'success': result.returncode == 0,
             'hostname': hostname,
-            'service': service_type
+            'service_type': service_type,
+            'status': status
         }
 
     except subprocess.TimeoutExpired:
@@ -315,22 +324,76 @@ def run_service_command(service_name):
             'error': str(e)
         }
 
+def get_latest_version():
+    # Get the latest release from the repo
+    url = f"https://api.github.com/repos/SiniousMaximus/service-checker/releases/latest"
+    request = requests.get(url, timeout=5)
+    request.raise_for_status()
+    return request.json()["tag_name"]
+
+def get_new_server_file():
+    # Gets the new server.py file from the url
+    url = "https://raw.githubusercontent.com/SiniousMaximus/service-checker/refs/heads/main/server.py"
+    request = requests.get(url, timeout=10)
+    request.raise_for_status()
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    tmp.write(request.content)
+    tmp.close()
+
+    new_file = Path(tmp.name)
+
+    # Copy permissions from current script (including executable bit)
+    current_file = Path(sys.argv[0]).resolve()
+    if current_file.exists():
+        mode = os.stat(current_file).st_mode
+        os.chmod(new_file, mode)
+    else:
+        # If for some reason the current script doesn't exist, make executable anyway
+        os.chmod(new_file, 0o755)
+
+    return new_file
+
+def update_server():
+    latest_tag = get_latest_version()
+    if version != latest_tag:
+        new_file = get_new_server_file()
+        current_file = Path(sys.argv[0]).resolve()
+        st = os.stat(current_file)
+        os.chmod(new_file, st.st_mode)
+
+        shutil.move(new_file, current_file)
+        print(f"Succesfully updated the script to version {latest_tag}")
+        sys.exit(2)
+    else:
+        print("Already running the latest verion")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Simple HTTP Server to check remote services via ssh')
-    parser.add_argument('command', choices=['start', 'stop', 'restart', 'status'],
-                       help='Command to execute')
+    parser.add_argument('command', choices=['start', 'stop', 'restart', 'status', 'version', 'update'],
+                        help='Command to execute')
     parser.add_argument('-p', '--port', type=int, default=8000,
-                       help='Port number (default: 8000)')
+                        help='Port number (default: 8000)')
     parser.add_argument('-d', '--daemon', action='store_true',
-                       help='Run in foreground (for Docker)')
+                        help='Run in background')
+    parser.add_argument('-c', '--config', action='store', dest='config_file_path', default="/etc/service-checker/config.yml",
+                        help='Config file path (default=/etc/service-checker/config.yml)')
     
     args = parser.parse_args()
     
-    if args.command == 'start':
-        start_server(args.port, args.daemon)
-    elif args.command == 'stop':
-        stop_server(args.port)
-    elif args.command == 'restart':
-        restart_server(args.port)
-    elif args.command == 'status':
-        status_server(args.port)
+    config_file_path = args.config_file_path 
+    match args.command:
+        case 'start':
+            start_server(args.port, args.daemon)
+        case 'stop':
+            stop_server(args.port)
+        case 'restart':
+            restart_server(args.port)
+        case 'status':
+            status_server(args.port)
+        case 'version':
+            print(version)
+        case 'update':
+            update_server()
+
+    
