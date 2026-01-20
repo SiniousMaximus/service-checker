@@ -2,7 +2,7 @@ FROM alpine:3.23.2
 
 # Install packages
 RUN apk update && apk upgrade && \
-    apk add --no-cache openssh python3 py3-yaml
+    apk add --no-cache openssh python3 py3-yaml py3-requests
 
 # Copy application files
 RUN mkdir /etc/service-checker
