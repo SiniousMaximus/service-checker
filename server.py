@@ -14,8 +14,8 @@ import tempfile
 from pathlib import Path
 import shutil
 
-# Version, same as the tag in the repo
-version = "v0.1.2"
+# Version, same as the tag in the repo. Used when using the update command with the script
+version = "v0.1.3"
 
 class CustomHandler(http.server.BaseHTTPRequestHandler):
     
@@ -111,7 +111,7 @@ def daemonize(port):
         print(f"Fork failed: {e}")
         sys.exit(1)
     
-    # Redirect standard file descriptors
+    # Redirect stdout and stderr to log 
     sys.stdout.flush()
     sys.stderr.flush()
     
@@ -142,24 +142,31 @@ def start_server(port=8000, daemon=False):
     log_file = get_log_file(port) if daemon else None
     if log_file:
         with open(log_file, 'a') as f:
-            f.write(f"\n=== Server started at {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-            f.write(f"PID: {os.getpid()}, Port: {port}\n")
+            f.write(f"Server started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            f.write(f"PID: {os.getpid()}, Port: {port}")
+            f.write(f"Using config file: {config_file_path}\n")
     else:
-        print(f"\n=== Server started at {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
+        print(f"Server started at {time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"PID: {os.getpid()}, Port: {port}")
+        print(f"Using config file: {config_file_path}\n")
     
     Handler = CustomHandler
-    
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("0.0.0.0", port), Handler) as httpd:
-        print(f"Server running listening on http://0.0.0.0:{port}/")
-        sys.stdout.flush()  
-        try:
+    socketserver.TCPServer.allow_reuse_address = True # This seemes to fix a bug where after retsarting, the port was still unavailable for some time
+     
+    try:
+        with socketserver.TCPServer(("0.0.0.0", port), Handler) as httpd:
+            print(f"Server listening on http://0.0.0.0:{port}/")
+            sys.stdout.flush() 
             httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nShutting down server...")
-        except Exception as e:
-            print(f"Error: {e}")
+    except KeyboardInterrupt:
+        print("\nShutting down server...")
+    except OSError as e:
+        if e.errno == 98:  # Address already in use
+            print(f"Error: Port {port} is already in use")
+        else:
+            print(f"OS Error: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
 
 def stop_server(port):
     # Stop the web server
@@ -169,20 +176,13 @@ def stop_server(port):
     
     pid = get_pid(port)
     print(f"Stopping server listening on http://0.0.0.0:{port}/ (PID: {pid})...")
-
-    def cleanup_handler():
-        files = [get_pid_file(port), get_log_file(port)]
-        for file in files:
-            if os.path.exists(file):
-                os.remove(file)
-        sys.exit(0)
     
     try:
         os.kill(pid, signal.SIGTERM)
         
         # Wait for process to terminate
         for i in range(10):
-            time.sleep(0.2)
+            time.sleep(0.5)
             if not is_running(port):
                 print("Server stopped successfully")
                 return
@@ -192,22 +192,13 @@ def stop_server(port):
         os.kill(pid, signal.SIGKILL)
         time.sleep(0.5)
         
-        if os.path.exists(get_pid_file(port)):
-            os.remove(get_pid_file(port))
+        # Removing any lefover PID file and log
+        files = [get_pid_file(port), get_log_file(port)]
+        for file in files:
+            if os.path.exists(file):
+                os.remove(file)
         
         print("Server stopped (forced)")
-       
-        time.sleep(1)
-    
-        max_wait = 5
-        for i in range(max_wait):
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.bind(('0.0.0.0', port))
-                s.close()
-                break
-            except OSError:
-                time.sleep(1)
 
     except OSError as e:
         print(f"Error stopping server: {e}")
@@ -223,13 +214,16 @@ def status_server(port):
     else:
         print(f"Server is not running on port {port}")
 
-def restart_server(port):
+def restart_server(port, daemon):
     # Restart the web server
-    print(f"Restarting server listening on http://0.0.0.0:{port}/ ...")
     if is_running(port):
+        print(f"Restarting server listening on http://0.0.0.0:{port}/ ...")
         stop_server(port)
         time.sleep(1)
-    start_server(port)
+    else:
+        print(f"Server is not running on port {port}")
+        sys.exit(0)
+    start_server(port, daemon)
     print(f"Server restarted on port {port}")
 
 def load_config(config_file_path):
@@ -259,7 +253,7 @@ def run_service_command(service_name):
     if not service_info:
         return {
             'success': False,
-            'error': f'Service {service_name} not found in config'
+            'error': f'Service "{service_name}" was not found in the config file'
         }
 
     # Get the data from config.yml
@@ -281,6 +275,7 @@ def run_service_command(service_name):
             'error': f'Unknown service type: {service_type}'
         }
 
+    # Sending the ssh command
     ssh_cmd = f'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null {user}@{ip} -p {port} -i {ssh_key} "{remote_cmd}"'
     
     try:
@@ -325,7 +320,7 @@ def run_service_command(service_name):
         }
 
 def get_latest_version():
-    # Get the latest release from the repo
+    # Get the latest release tag from the repo
     url = f"https://api.github.com/repos/SiniousMaximus/service-checker/releases/latest"
     request = requests.get(url, timeout=5)
     request.raise_for_status()
@@ -343,7 +338,7 @@ def get_new_server_file():
 
     new_file = Path(tmp.name)
 
-    # Copy permissions from current script (including executable bit)
+    # Copy permissions from current script
     current_file = Path(sys.argv[0]).resolve()
     if current_file.exists():
         mode = os.stat(current_file).st_mode
@@ -355,8 +350,12 @@ def get_new_server_file():
     return new_file
 
 def update_server():
+    # Gets the newest server.py if the versions don't match, and replace the script with the new one
     latest_tag = get_latest_version()
+    print(f"Current version: {version}")
+    print(f"Latest version: {latest_tag}")
     if version != latest_tag:
+        print(f"Newer script detected, updating...")
         new_file = get_new_server_file()
         current_file = Path(sys.argv[0]).resolve()
         st = os.stat(current_file)
@@ -364,6 +363,7 @@ def update_server():
 
         shutil.move(new_file, current_file)
         print(f"Succesfully updated the script to version {latest_tag}")
+        print("Please restart any service currently running the script to apply the update")
         sys.exit(2)
     else:
         print("Already running the latest verion")
@@ -388,7 +388,7 @@ if __name__ == "__main__":
         case 'stop':
             stop_server(args.port)
         case 'restart':
-            restart_server(args.port)
+            restart_server(args.port, args.daemon)
         case 'status':
             status_server(args.port)
         case 'version':
