@@ -25,24 +25,23 @@ detect_init() {
     exit 1
 }
 
-# Getting the latest server.py 
-update() {
-	echo "Getting the latest server.py script..."
-	curl -fL -o "$WORK_DIR/server.py" \
-	    https://raw.githubusercontent.com/SiniousMaximus/service-checker/main/server.py \
-	    || exit 1
+if [ -z "$1" ]; then
+    echo "Usage: $0 /path/to/server.py"
+    exit 1
+fi
+SCRIPT=$1
 
-	echo "Restarting the service-checker service"
-	if [ "$INIT" = "systemd" ]; then
-		systemctl restart service-checker.service
-	else
-		rc-service service-checker restart
-	fi	
-}
+python3 $SCRIPT update
+status=$?
 
-main() {
-	detect_init
-	update
-}
-
-main
+if [ "$status" = 2 ]; then
+    echo "Update was performed, restarting service..."
+    if [ "$INIT" = "systemd" ]; then
+        systemctl restart service-checker
+    else
+        rc-service service-checker restart
+    fi
+    echo "Service restart succesful"
+else
+    echo "Already updated"
+fi
