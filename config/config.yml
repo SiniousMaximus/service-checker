@@ -1,6 +1,6 @@
 service1:
   hostname: host1
-  service: systemd
-service2:
-  hostname: host2
-  service: openrc
+  service_type: systemd
+  user: admin
+  # port: 22
+  ssh_key: /etc/service-checker/config/ssh/ssh_key_1
