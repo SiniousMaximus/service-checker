@@ -6,9 +6,9 @@ Uptime kuma is a great service, but for my personal use case missed a feature, t
 
 ## Requirements
 
-You can either get Service Checker with docker, or run it bare metal (or in a Proxmox LXC, but you get what I mean). Bare metal requires curl, python3, python3-yaml, python3-requests, and openssh.
+You can either get Service Checker with docker, or run it bare metal (or in a Proxmox LXC, but you get what I mean). Bare metal requires python3 and openssh.
 
-Only services running with Systemd, OpenRC, or docker are supported currently. Both checking the container status or health (if it has a healthcheck) is supported. The server must be able to connect to a user with the privelage to do the healthchecks, via ssh with a private key.
+Only remote services running with Systemd, OpenRC, or inside docker are supported currently. Both checking the container status or health (if it has a healthcheck) is supported. The server must be able to connect to a user with the privelage to do the healthchecks, via ssh with a private key.
 
 The server requires access to a config file and a directory with the private ssh keys used to connect to the remotes. The config must be in yaml with the following structure (service1 should be replaced with the actuall service name on the remote host):
 
@@ -69,36 +69,21 @@ services:
 
 See the requirments section.
 
-You can use the provided install.sh script to automate the installation of Service Checker on your linux device with the following command: `curl -fsSL https://raw.githubusercontent.com/SiniousMaximus/service-checker/refs/heads/main/install.sh | sh`.
+Clone the repo and run `make install`:
 
-The script downloads server.py and an example config.yml into /etc/service-checker, creates a Systemd or OpenRC service called service-checker, and enable and starts it. The script must be ran as root, so do that or make sure you have sudo installed. Since this script expects to create a service file, your system must have Systemd or OpenRC installed to use it. Non Systemd or OpenRC systems might work with the server, but none has been tested so far.
+```sh
+git clone https://github.com/SiniousMaximus/service-checker
+cd service-checker
+make install
+```
 
-The install script checks for the presence of curl, python3, and openssh, but not python3-yaml and python3-requests, as their names are different across many distros. Make sure you have all of them installed. To my knowledge, the package naming scheme is "python3-yaml" in debian based and "python-yaml" in arch based ditros, and "py3-yaml" in alpine, same for python3-requests.
+This script stores the config files in `/etc/service-checker/config/config.yml`. Optionally, you can also store the private ssh keys used with Service Checker in `/etc/service-checker/config/ssh/`, but that is not mandatory. After adding your desired services to the config file, start the service-checker service and enable it at boot. For Systemd systems run `sudo systemctl enable --now service-checker` and for OpenRC systems run `sudo rc-update add service-checker default && sudo rc-service service-checker start`.
 
-The following commands can be used with server.py:
-
-- start: Starts the process in the foreground
-- stop: Stops the webserver.
-- retstart: Restarts the webserver (Use -d if you want the new process to run in the background)
-- status: Shows the status of the webserver.
-- version: Shows the current version of teh script
-- update: Updates the script to the latest release
-
-The follwoing flags are useable with server.py:
-
-- -d / --daemon: Combined with start, starts the process in the background
-- -p / --port [PORT]: Change the port the webserver listens on. Default port is 8000
-- -c / --config [PATH TO CONFIG FILE]: Use a custom path pointing to a config file, defaults to /etc/service-checker/config.yml
-
-The server responds to http GET requests on `http://0.0.0.0:8000/` and `http://0.0.0.0:8000/api/service/<service-name>`. The former retuns a simple health check for the server, and the later checks the status of the specified service on a remote host, and returns a json responce like the following example: `{"service_name": "caddy", "success": true, "hostname": "caddy-lxc", "service_type": "systemd", "status": "up"}`
+You can also update or uninstall Service Checker, similarly by running `make update` or `make uninstall` inside the repo. Be advised that uninstalling with this method removes every change made by the installation script, including removing the `/etc/service-checker` directory and the python virtual enviournment.
 
 ## Uptime Kuma intergarion
 
 In the dashboard, add a new monitor with the type "HTTP(S)-Json Query". The URL should be `http://<service-checker-ip>:8000/api/service/<service-name>` to check the status of service-name, which should be defined in the config file. The json query expression should be "$.status", and the keyword should be equal to "up" (== up).
-
-## Updating
-
-For your own sake, backup what you have in case of any breaking change after an update. If you are using the docker image, simply use `docker pull siniousmaximus/server-checker:latest` to get the latest image. Otherwise, you can use `./server.py update` to update and replace the script with the latest release. If using a Systemd or OpenRC service to run the script, you should manually restart the service after an update to make it use the new script. Or you can use the update.sh script. It requirs you to give it the path to the server script, and then performs the update and restarts a service called service-checker.
 
 ## Security
 

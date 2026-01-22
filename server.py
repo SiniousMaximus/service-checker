@@ -9,13 +9,12 @@ import signal
 import time
 import subprocess
 import yaml
-import requests
-import tempfile
+from cerberus import Validator
 from pathlib import Path
-import shutil
 
-# Version, same as the tag in the repo. Used when using the update command with the script
-version = "v0.1.3"
+
+cwd = Path.cwd()
+default_config_path = f"{cwd}/config/config.yml"
 
 class CustomHandler(http.server.BaseHTTPRequestHandler):
     
@@ -226,18 +225,42 @@ def restart_server(port, daemon):
     start_server(port, daemon)
     print(f"Server restarted on port {port}")
 
-def load_config(config_file_path):
-    # Load configuration from config.yml in current directory
-    config_file = config_file_path or "/etc/service-checker/config.yml"
+def load_and_check_config(config_file_path):
+
+    # Load configuration from config.yml 
+    config_file = config_file_path or default_config_path
     
     if not os.path.exists(config_file):
         print(f"Warning: config.yml not found at {config_file}")
         return {}
-    
+
+    # Defining the schema for EACH service
+    service_schema = {
+        'hostname': {'type': 'string', 'required': False, 'default': 'hostname not specified'},
+        'service_type': {'type': 'string', 'required': True},
+        'user': {'type': 'string', 'required': True},
+        'port': {'type': 'integer', 'required': False, 'default': 22},
+        'ssh_key': {'type': 'string', 'required': True},
+        'ip': {'type': 'string', 'required': False},
+    }
+
     try:
         with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
-            return config if config else {}
+            data = yaml.safe_load(f)
+        
+        # Validate EACH service individually
+        validated_config = {}
+        v = Validator(service_schema)
+        
+        for service_name, service_config in data.items():
+            if v.validate(service_config):
+                validated_config[service_name] = v.normalized(service_config)
+            else:
+                print(f"Validation errors for '{service_name}': {v.errors}")
+                return {}
+        
+        return validated_config
+        
     except yaml.YAMLError as e:
         print(f"Error parsing config.yml: {e}")
         return {}
@@ -247,21 +270,21 @@ def load_config(config_file_path):
 
 def run_service_command(service_name):
     # Load config file
-    config = load_config(config_file_path)
+    config = load_and_check_config(config_file_path)
     service_info = config.get(service_name)
 
     if not service_info:
         return {
             'success': False,
-            'error': f'Service "{service_name}" was not found in the config file'
+            'error': f"Service '{service_name}' was not found in the config file"
         }
 
     # Get the data from config.yml
-    hostname = service_info.get('hostname', "hostname not specified") # Sets the hostname to "hostname not specified" if not set in the config file
+    hostname = service_info.get('hostname')
     service_type = service_info.get('service_type')
     user = service_info.get("user")
     ip = service_info.get("ip")
-    port = service_info.get("port", "22") # Defaults to 22 if not specified
+    port = service_info.get("port")
     ssh_key = service_info.get("ssh_key")
     
     # Main service check logic
@@ -325,65 +348,16 @@ def run_service_command(service_name):
             'error': str(e)
         }
 
-def get_latest_version():
-    # Get the latest release tag from the repo
-    url = f"https://api.github.com/repos/SiniousMaximus/service-checker/releases/latest"
-    request = requests.get(url, timeout=5)
-    request.raise_for_status()
-    return request.json()["tag_name"]
-
-def get_new_server_file():
-    # Gets the new server.py file from the url
-    url = "https://raw.githubusercontent.com/SiniousMaximus/service-checker/refs/heads/main/server.py"
-    request = requests.get(url, timeout=10)
-    request.raise_for_status()
-
-    tmp = tempfile.NamedTemporaryFile(delete=False)
-    tmp.write(request.content)
-    tmp.close()
-
-    new_file = Path(tmp.name)
-
-    # Copy permissions from current script
-    current_file = Path(sys.argv[0]).resolve()
-    if current_file.exists():
-        mode = os.stat(current_file).st_mode
-        os.chmod(new_file, mode)
-    else:
-        # If for some reason the current script doesn't exist, make executable anyway
-        os.chmod(new_file, 0o755)
-
-    return new_file
-
-def update_server():
-    # Gets the newest server.py if the versions don't match, and replace the script with the new one
-    latest_tag = get_latest_version()
-    print(f"Current version: {version}")
-    print(f"Latest version: {latest_tag}")
-    if version != latest_tag:
-        print(f"Newer script detected, updating...")
-        new_file = get_new_server_file()
-        current_file = Path(sys.argv[0]).resolve()
-        st = os.stat(current_file)
-        os.chmod(new_file, st.st_mode)
-
-        shutil.move(new_file, current_file)
-        print(f"Succesfully updated the script to version {latest_tag}")
-        print("Please restart any service currently running the script to apply the update")
-        sys.exit(2)
-    else:
-        print("Already running the latest verion")
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Simple HTTP Server to check remote services via ssh')
-    parser.add_argument('command', choices=['start', 'stop', 'restart', 'status', 'version', 'update'],
+    parser.add_argument('command', choices=['start', 'stop', 'restart', 'status'],
                         help='Command to execute')
     parser.add_argument('-p', '--port', type=int, default=8000,
                         help='Port number (default: 8000)')
     parser.add_argument('-d', '--daemon', action='store_true',
                         help='Run in background')
-    parser.add_argument('-c', '--config', action='store', dest='config_file_path', default="/etc/service-checker/config.yml",
-                        help='Config file path (default=/etc/service-checker/config.yml)')
+    parser.add_argument('-c', '--config', action='store', dest='config_file_path', default=default_config_path,
+                        help='Config file path (default=$PWD/config/config.yml)')
     
     args = parser.parse_args()
     
@@ -397,9 +371,5 @@ if __name__ == "__main__":
             restart_server(args.port, args.daemon)
         case 'status':
             status_server(args.port)
-        case 'version':
-            print(version)
-        case 'update':
-            update_server()
 
     

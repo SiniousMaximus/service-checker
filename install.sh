@@ -1,6 +1,8 @@
 #!/bin/sh
 
-WORK_DIR="/etc/service-checker"
+WORK_DIR=$(pwd)
+INSTALL_DIR=/etc/service-checker
+mkdir -p $INSTALL_DIR
 
 # Rerun as root if not already
 if [ "$(id -u)" -ne 0 ]; then
@@ -29,11 +31,11 @@ check() {
     PKG="$1"
 
     if command -v "$PKG" >/dev/null 2>&1; then
-        printf "Package %s was detected\n" "$PKG"
+        printf "The %s binary was detected\n" "$PKG"
         return 0
     fi
 
-    printf "Package %s was not found. Please install it manually\n" "$PKG"
+    printf "The %s binary was not found. Please install it manually\n" "$PKG"
     return 1
 }
 
@@ -41,14 +43,8 @@ check() {
 installer() {
     mkdir -p "$WORK_DIR"
 
-	echo "Downloading server files..."
-    curl -fL -o "$WORK_DIR/config.yml" \
-        https://raw.githubusercontent.com/SiniousMaximus/service-checker/main/config/config.yml \
-        || exit 1
-
-    curl -fL -o "$WORK_DIR/server.py" \
-        https://raw.githubusercontent.com/SiniousMaximus/service-checker/main/server.py \
-        || exit 1
+    cp server.py $INSTALL_DIR/server.py
+    cp -r config/ $INSTALL_DIR
 
 	echo ""
     if [ "$INIT" = "systemd" ]; then
@@ -60,17 +56,16 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$WORK_DIR
-ExecStart=/usr/bin/python3 $WORK_DIR/server.py start
-ExecStop=/usr/bin/python3 $WORK_DIR/server.py stop
-ExecReload=/usr/bin/python3 $WORK_DIR/server.py restart
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$WORK_DIR/sc-env/bin/python3 $INSTALL_DIR/server.py start
+ExecStop=$WORK_DIR/sc-env/bin/python3 $INSTALL_DIR/server.py stop
+ExecReload=$WORK_DIR/sc-env/bin/python3 $INSTALL_DIR/server.py restart
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 EOF
 		systemctl daemon-reload
-		systemctl enable --now service-checker
 	
     else
     	cat <<EOF > /etc/init.d/service-checker
@@ -79,12 +74,12 @@ EOF
 name="service-checker"
 description="Service Checker"
 
-WORK_DIR="$WORK_DIR"
-command="/usr/bin/python3"
-command_args="\$WORK_DIR/server.py start"
+WORK_DIR="$INSTALL_DIR"
+command="\$WORK_DIR/sc-env/bin/python3"
+command_args="\$INSTALL_DIR/server.py start"
 command_background="yes"
-directory="\$WORK_DIR"
-pidfile="\$WORK_DIR/server.pid"
+directory="\$INSTALL_DIR"
+pidfile="\$INSTALL_DIR/server.pid"
 
 depend() {
     need net
@@ -92,30 +87,23 @@ depend() {
 
 stop() {
     ebegin "Stopping \$name"
-    "\$command" "\$WORK_DIR/server.py" stop
+    "\$command" "\$INSTALL_DIR/server.py" stop
     eend \$?
 }
 
 restart() {
     ebegin "Restarting \$name"
-    "\$command" "\$WORK_DIR/server.py" restart
+    "\$command" "\$INSTALL_DIR/server.py" restart
     eend \$?
-}
-
-status() {
-    "\$command" "\$WORK_DIR/server.py" status
 }
 EOF
 
 		chmod +x /etc/init.d/service-checker
-		rc-update add service-checker default
-		rc-service service-checker start
 	fi
 }
 
 main() {
     detect_init
-    check curl || exit 1
     check python3 || exit 1
     check ssh || exit 1
     installer
