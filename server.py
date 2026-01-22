@@ -13,7 +13,7 @@ from cerberus import Validator
 from pathlib import Path
 
 
-cwd = Path.cwd()
+cwd = script_dir = Path(__file__).parent
 default_config_path = f"{cwd}/config/config.yml"
 
 class CustomHandler(http.server.BaseHTTPRequestHandler):
