@@ -81,6 +81,8 @@ This script stores the config files in `/etc/service-checker/config/config.yml`.
 
 You can also update or uninstall Service Checker, similarly by running `make update` or `make uninstall` inside the repo. Be advised that uninstalling with this method removes every change made by the installation script, including removing the `/etc/service-checker` directory and the python virtual enviournment.
 
+NOTE: `make install` is broken on OpenRC systems because I symply can't wrap my head around making an OpenRC service. It will be fixed eventually in later releases.
+
 ## Uptime Kuma intergarion
 
 In the dashboard, add a new monitor with the type "HTTP(S)-Json Query". The URL should be `http://<service-checker-ip>:8000/api/service/<service-name>` to check the status of service-name, which should be defined in the config file. The json query expression should be "$.status", and the keyword should be equal to "up" (== up).
